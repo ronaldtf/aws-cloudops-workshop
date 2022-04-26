@@ -1,0 +1,60 @@
+
+---
+# Define role execution in a Stack for a child account
+
+# Author: Ronald Teijeira
+# Email:  ronald.teijeira@techdata.com
+# Team:   CoE TechData - Europe
+
+AWSTemplateFormatVersion: 2010-09-09
+
+Parameters:
+  ParentRoleARN:
+    Type: String
+    Description: Account Id (parent) where the stack set is being executed
+    AllowedPattern: "arn:aws:iam::[0-9]+:role/.*"
+    MinLength: 35
+
+Resources:
+
+  ChildRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub ${AWS::StackName}-child-policy
+      Description: Role for deploying resources via CloudFormation 
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              AWS: 
+                - !Ref ParentRoleARN
+            Action:
+              - sts:AssumeRole
+      Path: /
+      Policies:
+        - PolicyName: !Sub ${AWS::StackName}-policy
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Sid: s3actions
+                Effect: Allow
+                Action:
+                  - s3:*
+                Resource:
+                  - arn:aws:s3:::bcn-workshop*
+              - Sid: cfactions
+                Effect: Allow
+                Action:
+                  - cloudformation:*
+                Resource:
+                  - !Sub arn:aws:cloudformation:*:${AWS::AccountId}:stack*
+              - Sid: snsactions
+                Effect: Allow
+                Action: sns:*
+                Resource: '*'
+
+Outputs:
+  ChildRole:
+    Value: !Ref ChildRole
+    Description: Role name for the child account

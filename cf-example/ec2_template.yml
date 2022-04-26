@@ -1,0 +1,82 @@
+---
+# Deploy an EC2 instance and a lambda function. Requirements
+
+# Author: Ronald Teijeira
+# Email:  ronald.teijeira@techdata.com
+# Team:   CoE TechData - Europe
+
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Deploy an EC2 instance and a lambda function. Requirements => public network
+Parameters:
+  ExistingVPC:
+    Type: AWS::EC2::VPC::Id
+    Description: The VPC ID for the Security Group
+  ExistingSubnet:
+    Type: AWS::EC2::Subnet::Id
+    Description: Teh subnet ID for the EC2 instance
+  InstanceType:
+    Type: String
+    Default: t2.micro
+    AllowedValues:
+    - t2.micro
+    - m1.small
+  AMI:
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-ebs
+
+Resources:
+  SecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow HTTP traffic to the host
+      VpcId:
+        Ref: ExistingVPC
+      SecurityGroupIngress:
+      # - IpProtocol: tcp
+      #   FromPort: 80
+      #   ToPort: 80
+      #   CidrIp: 0.0.0.0/0
+      - IpProtocol: tcp
+        FromPort: 22
+        ToPort: 22
+        CidrIp: 0.0.0.0/0
+      SecurityGroupEgress:
+      - IpProtocol: -1
+        FromPort: -1
+        ToPort: -1
+        CidrIp: 0.0.0.0/0
+  MyEC2Instance:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: !Ref AMI
+      SecurityGroupIds:
+        - !GetAtt SecurityGroup.GroupId
+      SubnetId: !Ref ExistingSubnet
+      InstanceType:
+        Ref: InstanceType
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          yum update -y
+          yum install -y httpd
+          systemctl start httpd
+          systemctl enable httpd
+          usermod -a -G apache ec2-user
+          chmod 2775 /var/www
+          wget -P /var/www/html/ https://aws-workshop-bcn.s3.eu-west-1.amazonaws.com/cf-example/index.html
+          find /var/www -type d -exec chmod 2775 {} \;
+          find /var/www -type f -exec chmod 0664 {} \;          
+
+      Tags:
+        - Key: Name
+          Value: !Ref AWS::StackName
+        - Key: Environment 
+          Value: workshop
+
+Outputs:
+  EC2InstanceURL:
+    Description: EC2 instance URL
+    Value: !Join
+      - ''
+      - - 'http://'
+        - !GetAtt MyEC2Instance.PublicIp    
